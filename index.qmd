@@ -1,0 +1,578 @@
+---
+title: "Reporte de Monitoreo - British Council"
+subtitle: "Seguimiento de Profesores y Rectores Bucaramanga"
+author: "Figura 01"
+date: today
+date-format: long
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-fold: true
+    code-tools: true
+    embed-resources: true
+    css: |
+      .quarto-title-block {
+        background: linear-gradient(135deg, #2E8B57 0%, #2C3E50 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+      }
+      .quarto-title-block h1 {
+        color: white;
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+      }
+      .quarto-title-block .subtitle {
+        color: #E8F5E8;
+        font-size: 1.2rem;
+      }
+      .quarto-title-block .author {
+        color: #E8F5E8;
+        font-size: 1rem;
+      }
+      .quarto-title-block .date {
+        color: #E8F5E8;
+        font-size: 0.9rem;
+      }
+      .callout {
+        border-left: 4px solid #2E8B57;
+        background-color: #F8F9FA;
+        padding: 1rem;
+        border-radius: 5px;
+        margin: 1rem 0;
+      }
+      .callout-title {
+        font-weight: bold;
+        color: #2C3E50;
+        margin-bottom: 0.5rem;
+      }
+      .figure-caption {
+        font-size: 0.9rem;
+        color: #6C757D;
+        text-align: center;
+        margin-top: 0.5rem;
+      }
+      .metric-card {
+        background: white;
+        border: 1px solid #E9ECEF;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+      .metric-value {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #2E8B57;
+        margin-bottom: 0.5rem;
+      }
+      .metric-label {
+        color: #6C757D;
+        font-size: 0.9rem;
+      }
+---
+
+```{r setup, include=FALSE}
+#| echo: false
+#| message: false
+#| warning: false
+
+# Cargar librerías necesarias
+library(googlesheets4)
+library(tidyverse)
+library(hrbrthemes)
+library(extrafont)
+library(knitr)
+library(kableExtra)
+library(DT)
+library(arrow)
+
+# Configuración de opciones
+knitr::opts_chunk$set(
+    echo = FALSE,
+    message = FALSE,
+    warning = FALSE,
+    fig.width = 12,
+    fig.height = 8,
+    dpi = 300,
+    out.width = "100%"
+)
+
+# Paleta de colores profesional
+colores_bucaramanga <- c(Sí = "#2E8B57", No = "#FFA500")
+colores_estados <- c(
+    "Encuestado" = "#0cb2af",
+    "Recorrido" = "#0cb2af",
+    "Agendado" = "#a1c65d",
+    "En proceso" = "#fac723",
+    "Descartado" = "#936fac",
+    "No iniciado" = "#f29222",
+    "No contesta" = "#e95e50"
+)
+
+# Tema personalizado para reportes
+theme_report <- function() {
+    theme_minimal() +
+        theme(
+            text = element_text(family = "Arial", color = "#333333"),
+            plot.title = element_text(size = 20, face = "bold", color = "#2C3E50", hjust = 0.5, margin = margin(b = 20)),
+            plot.subtitle = element_text(size = 14, color = "#7F8C8D", hjust = 0.5, margin = margin(b = 30)),
+            plot.caption = element_text(size = 10, color = "#95A5A6", hjust = 1),
+            axis.title = element_text(size = 12, face = "bold", color = "#2C3E50"),
+            axis.text = element_text(size = 10, color = "#34495E"),
+            legend.title = element_text(size = 12, face = "bold", color = "#2C3E50"),
+            legend.text = element_text(size = 10, color = "#34495E"),
+            panel.grid.major = element_line(color = "#ECF0F1", size = 0.5),
+            panel.grid.minor = element_blank(),
+            plot.background = element_rect(fill = "white", color = NA),
+            panel.background = element_rect(fill = "white", color = NA),
+            legend.background = element_rect(fill = "white", color = NA),
+            strip.background = element_rect(fill = "#F8F9FA", color = "#E9ECEF"),
+            strip.text = element_text(size = 11, face = "bold", color = "#2C3E50")
+        )
+}
+
+
+```
+
+
+```{r data-loading}
+#| echo: false
+#| message: true
+
+llamadas <- read_parquet("llamadas.parquet")
+profesores <- read_parquet("profesores.parquet")
+rectores <- read_parquet("rectores.parquet")
+```
+
+# Seguimiento de Profesores
+
+## Estado de Observaciones y Encuestas
+
+```{r profesores-heatmap, fig.width = 6, fig.height = 13}
+library(gt)
+# Preparar datos de profesores
+profesores_resumen <- profesores |>
+    mutate(id_profesor = row_number()) |>
+    select(id_profesor, estado_observacion, estado_encuesta) |>
+    mutate(
+        estado_observacion = if_else(is.na(estado_observacion), "No iniciado", estado_observacion),
+        estado_encuesta = if_else(is.na(estado_encuesta), "No iniciado", estado_encuesta)
+    )
+
+profesores |>
+    mutate(id_profesor = row_number()) |>
+    select(institucion, nombre_docente, estado_observacion, estado_encuesta) |>
+    mutate(
+        estado_observacion = if_else(is.na(estado_observacion), "No iniciado", estado_observacion),
+        estado_encuesta = if_else(is.na(estado_encuesta), "No iniciado", estado_encuesta)
+    ) |>
+    gt::gt() |>
+    data_color(
+        columns = c(starts_with("estado_observacion"), starts_with("estado_encuesta")),
+        method = "factor",
+        palette = "viridis",
+        levels = c("Encuestado", "Agendado", "En proceso", "Descartado", "No iniciado", "No contesta")
+    ) |>
+    gt::cols_label(
+        institucion = "Institución",
+        nombre_docente = "Nombre del Docente",
+        estado_observacion = "Estado de Observación",
+        estado_encuesta = "Estado de Encuesta"
+    ) |>
+    gt::opt_interactive()
+
+```
+
+```{r profesores-summary-1, eval = FALSE}
+# Crear heatmap de profesores
+profesores_heatmap <- profesores_resumen |>
+    pivot_longer(cols = c(estado_observacion, estado_encuesta), names_to = "tipo", values_to = "estado") |>
+    mutate(
+        estado = if_else(is.na(estado), "No iniciado", estado),
+        tipo = case_when(
+            tipo == "estado_observacion" ~ "Observación",
+            tipo == "estado_encuesta" ~ "Encuesta",
+            TRUE ~ tipo
+        ),
+        estado = factor(estado, levels = c("Encuestado", "Agendado", "En proceso", "Descartado", "No iniciado", "No contesta"))
+    )
+
+# Crear visualización
+profesores_heatmap |>
+    ggplot(aes(
+        x = tipo,
+        y = reorder(id_profesor, desc(id_profesor)),
+        fill = estado
+    )) +
+    geom_tile(
+        color = "white",
+        size = 0.7,
+        width = 0.9,
+        height = 0.9
+    ) +
+    scale_fill_manual(values = colores_estados) +
+    theme_minimal(base_family = "Arial") +
+    theme(
+        axis.text.x = element_text(size = 10, face = "bold"),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "bottom",
+        legend.direction = "horizontal",
+        plot.title = element_text(size = 18, face = "bold", hjust = 0.5, color = "#24292e"),
+        plot.subtitle = element_text(size = 12, hjust = 0.5, color = "#586069", margin = margin(b = 20)),
+        plot.caption = element_text(size = 8, hjust = 1, color = "#bdbdbd"),
+        plot.background = element_rect(fill = "white", color = NA),
+        panel.background = element_rect(fill = "white", color = NA),
+        legend.background = element_rect(fill = "white", color = NA),
+        plot.margin = margin(20, 20, 20, 20)
+    ) +
+    labs(
+        title = "Estado de Progreso de Profesores",
+        subtitle = "Filas: profesores, columnas: estado",
+        fill = "",
+        caption = "Fuente: Sistema de monitoreo - British Council"
+    ) +
+    guides(fill = guide_legend(nrow = 2, byrow = TRUE))
+```
+
+## Resumen de Estados de Profesores
+
+```{r profesores-summary}
+# Crear tabla resumen de estados
+profesores_summary <- profesores_resumen |>
+    pivot_longer(cols = c(estado_observacion, estado_encuesta), names_to = "tipo", values_to = "estado") |>
+    mutate(
+        tipo = case_when(
+            tipo == "estado_observacion" ~ "Observación",
+            tipo == "estado_encuesta" ~ "Encuesta",
+            TRUE ~ tipo
+        )
+    ) |>
+    count(tipo, estado) |>
+    pivot_wider(names_from = estado, values_from = n, values_fill = 0) |>
+    rowwise() |>
+    mutate(Total = sum(c_across(-tipo))) |>
+    ungroup()
+
+# Mostrar tabla
+profesores_summary |>
+    kable(
+        caption = "Resumen de Estados por Tipo de Actividad",
+        align = "l",
+        digits = 0
+    ) |>
+    kable_styling(
+        bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+        full_width = FALSE,
+        position = "center"
+    ) |>
+    add_header_above(c(" " = 1, "Estados" = ncol(profesores_summary) - 1)) |>
+    row_spec(0, background = "#2E8B57", color = "white", bold = TRUE)
+```
+
+## Resumen de Estados de Rectores
+
+```{r profesores-descartados, fig.width = 6, fig.height = 13}
+
+profesores_descartados <- profesores |>
+    filter(estado_encuesta == "Descartado")
+
+```
+
+
+# Seguimiento de Rectores
+
+## Estado de Recorridos y Encuestas rectores/coordinadores
+
+```{r rectores-heatmap, fig.width = 6, fig.height = 10}
+# Crear tabla resumen de estados de rectores
+rectores_resumen <- rectores |>
+    mutate(id_rectores = row_number()) |>
+    select(institucion_educativa, id_rectores, recorrido, encuesta_rector) |>
+    transmute(
+        id_rectores,
+        institucion_educativa,
+        Recorrido = if_else(is.na(recorrido) | recorrido == "", "No iniciado", recorrido),
+        Encuesta = if_else(is.na(encuesta_rector) | encuesta_rector == "" | encuesta_rector == "NA", "No iniciado", encuesta_rector)
+    ) |>
+    mutate(
+        Recorrido = if_else(Recorrido == "NA", "No iniciado", Recorrido),
+        Encuesta = if_else(Encuesta == "NA", "No iniciado", Encuesta),
+        institucion_educativa =
+            str_replace_all(institucion_educativa, "INSTITUCIÓN EDUCATIVA", "I.E.")
+    )
+
+
+rectores_heatmap <- rectores_resumen |>
+    pivot_longer(cols = c(Recorrido, Encuesta), names_to = "tipo", values_to = "estado") |>
+    mutate(
+        estado = if_else(is.na(estado) | estado == "" | estado == "NA", "No iniciado", as.character(estado)),
+        estado = factor(estado, levels = c("No contesta", "Encuestado", "Recorrido", "Agendado", "En proceso", "Descartado", "No iniciado"))
+    ) |>
+    mutate(nombre_institucion = str_wrap(institucion_educativa, width = 40))
+
+
+
+# Ordenar institucion_educativa por el estado principal (p.ej., priorizando el peor/final estado para mostrar agrupadas)
+# Usamos la posición mínima de estado para cada institución para ordenarlas
+institucion_order <- rectores_heatmap |>
+    group_by(institucion_educativa) |>
+    summarize(min_estado = min(as.numeric(estado)), .groups = "drop") |>
+    arrange(min_estado, institucion_educativa) |>
+    pull(institucion_educativa)
+
+rectores_heatmap <- rectores_heatmap |>
+    mutate(institucion_educativa = factor(institucion_educativa, levels = institucion_order))
+
+# Crear visualización con y ordenado
+rectores_heatmap |>
+    arrange(institucion_educativa) |>
+    ggplot(aes(
+        x = tipo,
+        y = institucion_educativa,
+        fill = estado
+    )) +
+    geom_tile(
+        color = "white",
+        size = 0.7,
+        width = 0.9,
+        height = 0.9
+    ) +
+    scale_fill_manual(values = colores_estados) +
+    theme_minimal(base_family = "Arial") +
+    theme(
+        axis.text.x = element_text(size = 10, face = "bold"),
+        axis.text.y = element_text(size = 7),
+        axis.ticks = element_blank(),
+        panel.grid = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "bottom",
+        legend.direction = "horizontal",
+        plot.title = element_text(size = 18, face = "bold", hjust = 0.5, color = "#24292e"),
+        plot.subtitle = element_text(size = 8, hjust = 0.5, color = "#586069", margin = margin(b = 20)),
+        plot.caption = element_text(size = 8, hjust = 1, color = "#bdbdbd"),
+        plot.background = element_rect(fill = "white", color = NA),
+        panel.background = element_rect(fill = "white", color = NA),
+        legend.background = element_rect(fill = "white", color = NA),
+        plot.margin = margin(20, 20, 20, 20)
+    ) +
+    labs(
+        title = "",
+        fill = "",
+        caption = "Fuente: Sistema de monitoreo - British Council"
+    ) +
+    guides(fill = guide_legend(nrow = 3, byrow = TRUE))
+```
+
+```{r rectores-summary}
+
+rectores_summary <- rectores_resumen |>
+    pivot_longer(cols = c(Recorrido, Encuesta), names_to = "tipo", values_to = "estado") |>
+    count(tipo, estado) |>
+    pivot_wider(names_from = estado, values_from = n, values_fill = 0) |>
+    relocate(Recorrido, .after = Encuestado) |>
+    rowwise() |>
+    mutate(Total = sum(c_across(-tipo))) |>
+    ungroup()
+
+# Mostrar tabla
+rectores_summary |>
+    kable(
+        caption = "Resumen de Estados de Rectores por Tipo de Actividad",
+        align = "l",
+        digits = 0
+    ) |>
+    kable_styling(
+        bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+        full_width = FALSE,
+        position = "center"
+    ) |>
+    add_header_above(c(" " = 1, "Estados" = ncol(rectores_summary) - 1)) |>
+    row_spec(0, background = "#2E8B57", color = "white", bold = TRUE)
+```
+
+
+Rectores con quienes no hemos iniciado el contacto
+
+```{r rectores-no-iniciados}
+rectores_no_iniciados <- rectores |>
+    filter(is.na(recorrido) & is.na(encuesta_rector)) |>
+    select(institucion_educativa) |>
+    slice(-1) |>
+    gt() |>
+    cols_label(institucion_educativa = "Institución Educativa") |>
+    data_color(
+        columns = everything(),
+        colors = scales::col_factor(
+            palette = c("#f0f7f4"),
+            domain = NULL
+        )
+    )
+rectores_no_iniciados
+```
+
+# Razones que han dificultado el seguimiento
+
+
+📞 Docentes que no respondieron llamadas (ni WhatsApp)
+
+	•	Reiterados intentos sin éxito de contacto.
+
+“El docente no contestó las tres llamadas que se le realizaron, por lo tanto se envió la información vía wsp.”
+“El mensaje aparece como enviado pero aún no ha sido leído (solo tiene un visto: un solo chulo).”
+“Se realizaron las tres llamadas, al no recibir respuesta se procedió a enviar la información vía wsp.”
+
+
+📧 Solicitud y entrega de datos de contacto (rector, coordinador)
+
+	•	Muchos docentes no tienen los datos a la mano.
+
+“Vía whatsapp se le ha solicitado los correos del rector y coordinador de la IE.”
+“El docente manifiesta no tener el número o correo de la rectora de la institución.”
+“Envió el nombre del rector sin contacto y los datos de la coordinadora.”
+“La docente manifiesta que cuenta con la información, posterior a eso indica que la institución no cuenta con coordinadora.”
+
+📌 Errores, datos incorrectos o confusiones en la base
+
+	•	Confusión por información desactualizada en la base de datos.
+
+“El nombre del Coordinador de la Sede estaba incorrecto… corrigo nombre del coordinador en la BD.”
+“Las docentes de inglés figuran como coordinadoras.”
+"Cambio de número que se actualizó en la base de datos.”
+
+
+🙅‍♀️ Docentes que declinan participar
+
+	•	Se expresan razones personales, laborales o de descontento.
+
+“La docente se siente insegura del proceso y no quiere participar del convenio… expresa no tener tiempo.”
+“La docente manifiesta… si este componente es voluntario, no accederá a las actividades en esta ocasión por la agenda y falta de tiempo.”
+
+🚫 Situaciones excepcionales o personales
+
+	•	Imprevistos, licencias médicas o condiciones institucionales especiales.
+
+“La docente está incapacitada por lo que queda del año.”
+“El profesor contestó, pero se encuentra atravesando una calamidad familiar.”
+
+🔄 Compromisos de seguimiento o espera de respuesta
+
+	•	Situaciones en pausa, esperando respuesta o segunda llamada.
+
+“A espera de comunicación.”
+“La docente pidió que me comunicara con ella el día martes al regresar de la semana de receso…”
+“El rector manifestó que lo contactara el día de hoy (8 de octubre) sobre las 10 de la mañana pero no contestó.”
+
+# Datos de Llamadas a Profesores
+
+
+
+# Respuestas de Profesores y Rectores
+
+```{r pie-chart-function}
+# Función para crear gráficos de pastel profesionales
+create_pie_chart <- function(data, title, subtitle) {
+    data |>
+        ggplot(aes(x = "", y = prop, fill = get(names(data)[1]))) +
+        geom_col(width = 1, color = "white", linewidth = 2) +
+        coord_polar(theta = "y", start = 0) +
+        labs(x = NULL, y = NULL, fill = "") +
+        theme_void() +
+        theme(
+            plot.title = element_text(size = 22, face = "bold", color = "#2C3E50", hjust = 0.5, margin = margin(b = 15)),
+            plot.subtitle = element_text(size = 14, color = "#7F8C8D", hjust = 0.5, margin = margin(b = 25)),
+            legend.position = "none",
+            plot.background = element_rect(fill = "white", color = NA),
+            panel.background = element_rect(fill = "white", color = NA)
+        ) +
+        geom_text(aes(label = paste0(get(names(data)[1]), "\n", round(prop * 100, 1), "%")),
+            position = position_stack(vjust = 0.5), color = "white",
+            size = 11, fontface = "bold", family = "Arial"
+        ) +
+        scale_fill_manual(values = colores_bucaramanga) +
+        labs(title = title, subtitle = subtitle)
+}
+```
+
+## Respuesta de Profesores
+
+```{r llamadas-pie}
+
+llamadas_resumen <- llamadas |>
+    mutate(el_profesor_contesto_si_check = if_else(is.na(el_profesor_contesto_si_check), "No", "Sí")) |>
+    count(el_profesor_contesto_si_check) |>
+    mutate(
+        prop = n / sum(n),
+        label = paste0(el_profesor_contesto_si_check, "\n", scales::percent(prop))
+    )
+
+# Gráfico de respuesta de profesores
+p1 <- create_pie_chart(
+    llamadas_resumen,
+    "Respuesta de Profesores",
+    "¿El profesor contestó la llamada?"
+)
+
+p1
+```
+
+## Nivel de Información
+
+```{r informado-pie}
+
+llamadas_informado <- llamadas |>
+    mutate(el_profesor_contesto_si_check = if_else(is.na(el_profesor_contesto_si_check), "No", "Sí")) |>
+    filter(el_profesor_contesto_si_check == "Sí") |>
+    mutate(el_profesor_estaba_informado_si_check = if_else(is.na(el_profesor_estaba_informado_si_check), "No", "Sí")) |>
+    count(el_profesor_estaba_informado_si_check) |>
+    mutate(
+        prop = n / sum(n),
+        label = paste0(el_profesor_estaba_informado_si_check, "\n", scales::percent(prop))
+    )
+
+# Gráfico de nivel de información
+p2 <- create_pie_chart(
+    llamadas_informado,
+    "Nivel de Información",
+    "¿El profesor estaba informado sobre el programa?"
+)
+
+p2
+```
+
+## Calidad de la Información
+
+```{r calidad-info-pie}
+# Análisis de calidad de información
+llamadas_info_desactualizada <- llamadas |>
+    mutate(el_profesor_contesto_si_check = if_else(is.na(el_profesor_contesto_si_check), "No", "Sí")) |>
+    filter(el_profesor_contesto_si_check == "Sí") |>
+    mutate(informacion_estaba_desactualizada_si_check = if_else(is.na(informacion_estaba_desactualizada_si_check), "No", "Sí")) |>
+    count(informacion_estaba_desactualizada_si_check) |>
+    mutate(
+        prop = n / sum(n),
+        label = paste0(informacion_estaba_desactualizada_si_check, "\n", scales::percent(prop))
+    )
+
+p3 <- create_pie_chart(
+    llamadas_info_desactualizada,
+    "Calidad de la Información",
+    "¿La información estaba desactualizada o incompleta?"
+)
+
+p3
+```
+
+
+*Reporte generado el `r Sys.Date()` por el Sistema de Monitoreo del British Council*
+
+
